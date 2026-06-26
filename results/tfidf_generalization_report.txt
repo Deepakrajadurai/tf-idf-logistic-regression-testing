@@ -1,0 +1,7 @@
+Bundestag Speeches (Human)          | 15       | 15       | 100.0%
+German News/Wiki (Human)            | 15       | 15       | 100.0%
+Legal/Constitutional (Human)        | 15       | 15       | 100.0%
+ChatGPT style (AI)                  | 15       | 0        | 0.0%
+Gemini style (AI)                   | 15       | 0        | 0.0%
+Claude style (AI)                   | 15       | 0        | 0.0%
+Qwen style (AI)                     | 15       | 0        | 0.0%
