@@ -1,8 +1,11 @@
-# 🤖 G-BERT: German AI Text Detector
+# 🤖 German AI Text Detector (TF-IDF + Logistic Regression)
 
-A state-of-the-art AI text detection system for German language, built by fine-tuning [`deepset/gbert-large`](https://huggingface.co/deepset/gbert-large) on a curated multi-domain corpus of ~57,000 balanced paragraphs.
+An interpretable, lightweight, and ultra-fast AI text detection system for the German language, built using TF-IDF feature extraction and a Logistic Regression classifier. 
 
-> **Overall Test Accuracy: 99.77% | Macro F1: 99.77%**
+This pipeline was developed as a robust, explainable alternative to deep learning models (such as `gbert-large`) to investigate overfitting, dataset quality, and lexical shortcuts.
+
+> **Overall Test Accuracy: 100.00% | Macro F1: 100.00%**  
+> **Average CPU Inference Latency: 0.028 ms per text**
 
 ---
 
@@ -10,97 +13,49 @@ A state-of-the-art AI text detection system for German language, built by fine-t
 
 - [Overview](#overview)
 - [Key Features](#key-features)
-- [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Setup & Installation](#setup--installation)
 - [Pipeline Walkthrough](#pipeline-walkthrough)
-- [Usage](#usage)
-- [Model Performance](#model-performance)
-- [AI Model Coverage](#ai-model-coverage)
+- [Performance & Calibration](#performance--calibration)
+- [Top Stylistic Markers (Interpretability)](#top-stylistic-markers-interpretability)
+- [The Generalization Challenge (Crucial Insight)](#the-generalization-challenge-crucial-insight)
 - [License](#license)
 
 ---
 
 ## Overview
 
-G-BERT is a binary classifier that distinguishes **human-written** from **AI-generated** German text across three domains:
+This repository implements a binary classifier that distinguishes **human-written** from **AI-generated** German text. The pipeline handles data quality diagnostics, de-duplication, and strict length-matching to ensure the classifier does not exploit text length as a classification shortcut.
 
-| Domain | Human Source | AI Generation |
-|--------|-------------|---------------|
-| **Politics** | Bundestag parliamentary speeches | Multi-model synthetic speeches |
-| **News** | GNAD (German News Articles Dataset) | Multi-model synthetic news |
-| **Casual** | GermEval 2018 (social media, blogs, forums) | Multi-model synthetic casual text |
-
-The system uses **grammar-preserving placeholder masking** (replacing dates, party names, legal references, person names with tokens like `[DATUM]`, `[PARTEI]`, `[PERSON]`) to prevent the model from relying on domain-specific shortcuts and ensure robust generalization.
+Rather than relying on a heavy deep learning stack, it leverages a highly optimized **TF-IDF + Logistic Regression** pipeline, allowing it to run instantly on any CPU.
 
 ---
 
 ## Key Features
 
-- 🎯 **99.77% accuracy** on held-out test data
-- 🌐 **Multi-domain**: Politics, News, and Casual German text
-- 🤖 **Multi-model robust**: Trained against 8 diverse AI text generators
-- 📊 **Streamlit Web App** with single text + batch CSV analysis
-- 🔧 **Calibrated decision threshold** with adjustable sensitivity
-- ⚡ **FP16 inference** for fast GPU predictions
-- 📑 **Chunked long-document support** with overlapping window aggregation
-
----
-
-## Architecture
-
-```
-deepset/gbert-large (340M params)
-        │
-  Fine-tuned on ~57K paragraphs
-  (50% human / 50% AI, 3 domains)
-        │
-  Binary Classification Head
-        │
-  ┌─────┴─────┐
-  │           │
-Human (0)   AI (1)
-```
-
-**Training Configuration:**
-- Optimizer: AdamW (lr=2e-5, weight_decay=0.01)
-- Warmup: 10% of training steps
-- Epochs: 3 with early stopping (patience=2)
-- Max sequence length: 256 tokens
-- Precision: BF16/FP16 (automatic)
-- Batch size: 16
-- Best checkpoint selected by **external validation F1** (not in-distribution)
+- 🎯 **100.00% Accuracy** on balanced, held-out test data (50k rows).
+- ⚡ **Ultra-low latency** (~0.028 ms per text) on CPU—over 500x faster than BERT.
+- 📏 **Quantile-based length balancing** to eliminate length-based shortcuts.
+- 🔍 **Explainable & Interpretable**: Coefficients map directly back to German words/phrases.
+- ⚙️ **Zero deep learning dependencies** (no PyTorch, TensorFlow, or CUDA required for core execution).
 
 ---
 
 ## Project Structure
 
 ```
-├── prepare_dataset.py          # Step 1: Data loading, cleaning, balancing
-├── generate_synthetic_data.py  # Synthetic AI text generation
-├── generate_diverse_ai.py      # Multi-model diverse AI text generation
-├── train.py                    # Step 2: Fine-tuning with generalization tracking
-├── evaluate .py                # Step 3: Evaluation & holdout verification
-├── predict .py                 # Step 4: Inference pipeline (CLI + API)
-├── app.py                      # Streamlit web application
-├── requirements.txt            # Python dependencies
+├── requirements_tfidf.txt       # Lightweight package requirements
+├── prepare_dataset_tfidf.py     # Step 1: Preprocessing, deduplication, length-balancing, & splits
+├── train_tfidf.py               # Step 2: TF-IDF vectorization & Logistic Regression training/tuning
+├── evaluate_tfidf.py            # Step 3: Evaluation, calibration analysis, & feature extraction
+├── test_generalization_tfidf.py # Step 4: Generalization test on unseen real-world & synthetic AI styles
 ├── results/
-│   └── threshold.txt           # Calibrated decision threshold
-├── Data/                       # (not tracked — see Data section)
-│   ├── Human_model_ready_dataset.csv
-│   ├── gnad_articles.csv
-│   ├── germeval2018.txt
-│   ├── ai_generated_sentences_500k.csv
-│   ├── ai_generated_news.csv
-│   ├── ai_generated_casual.csv
-│   ├── train.csv / val.csv / test.csv
-│   ├── external_val.csv
-│   └── final_holdout.csv
-└── models/                     # (not tracked — >1GB model weights)
-    └── best_model/
+│   ├── tfidf_evaluation_report.md  # Detailed evaluation report
+│   ├── tfidf_feature_importance.csv# Coefficient weights for all vocabulary terms
+│   └── tfidf_generalization_report.txt # Generalization metrics on out-of-distribution texts
+└── models/
+    └── tfidf_logreg/            # Saved vectorizer and classifier joblib binaries
 ```
-
-> **Note:** The `Data/` and `models/` directories are excluded from version control due to file size constraints (>100MB). See the [Setup](#setup--installation) section for instructions.
 
 ---
 
@@ -109,159 +64,123 @@ Human (0)   AI (1)
 ### Prerequisites
 
 - Python 3.10+
-- NVIDIA GPU with CUDA support (recommended; CPU works but is slower)
-- ~2GB disk space for model weights
+- ~500 MB free disk space (to store the raw dataset in `Data/`)
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Deepakrajadurai/Fine-tune-BERT--deepsetgbert-large-.git
-cd Fine-tune-BERT--deepsetgbert-large-
+git clone https://github.com/Deepakrajadurai/tf-idf-logistic-regression-testing.git
+cd tf-idf-logistic-regression-testing
 ```
 
-### 2. Create Virtual Environment
+### 2. Set Up Virtual Environment
 
 ```bash
 python -m venv venv
-source venv/bin/activate        # Linux/Mac
-# or
-venv\Scripts\activate           # Windows
+# Activate on Windows:
+venv\Scripts\activate
+# Activate on Linux/Mac:
+source venv/bin/activate
 ```
 
 ### 3. Install Dependencies
 
 ```bash
-pip install -r requirements.txt
-pip install streamlit            # For the web app
+pip install -r requirements_tfidf.txt
 ```
 
-### 4. Prepare Data & Train (if needed)
+---
 
+## Pipeline Walkthrough
+
+Execute the full pipeline step-by-step:
+
+### Step 1: Data Preparation & Length Balancing
+Clean, de-duplicate, and split the raw Bundestag speeches and AI sentences into length-balanced splits (80/10/10):
 ```bash
-# Step 1: Prepare the dataset (requires raw data files in Data/)
-python prepare_dataset.py
-
-# Step 2: Train the model
-python train.py --epochs 3 --batch_size 16 --lr 2e-5
-
-# Step 3: Evaluate
-python "evaluate .py"
+python prepare_dataset_tfidf.py
 ```
+*Outputs: `Data/train_tfidf.csv`, `Data/val_tfidf.csv`, `Data/test_tfidf.csv`*
 
----
-
-## Usage
-
-### 🖥️ Web Application (Streamlit)
-
+### Step 2: Train & Tune Classifier
+Train both word-level and char-level TF-IDF pipelines, tune the regularization strength `C` on the validation set, and save the best model:
 ```bash
-streamlit run app.py
+python train_tfidf.py
 ```
+*Outputs: `models/tfidf_logreg/` containing saved models.*
 
-The web app provides:
-- **Single Text Analysis**: Paste any German text and get an instant AI/Human verdict with confidence scores
-- **Batch File Upload**: Upload a CSV file for high-throughput classification
-- **Adjustable Threshold**: Fine-tune the decision boundary via the sidebar slider
-- **Pre-loaded Examples**: Try built-in human and AI text samples
-
-### 🔧 Command-Line Interface
-
+### Step 3: Evaluate & Extract Interpretability
+Evaluate on the holdout test split, compute calibration metrics, and export feature coefficients:
 ```bash
-# Classify a single text
-python "predict .py" --text "Die Bundesregierung hat beschlossen..."
-
-# Classify from a file
-python "predict .py" --file my_document.txt
-
-# Batch CSV prediction
-python "predict .py" --csv input.csv --text_col text --out predictions.csv
-
-# Override threshold
-python "predict .py" --text "..." --threshold 0.5
+python evaluate_tfidf.py
 ```
+*Outputs: `results/tfidf_evaluation_report.md` and `results/tfidf_feature_importance.csv`*
 
-### 🐍 Python API
-
-```python
-from importlib.util import spec_from_file_location, module_from_spec
-
-spec = spec_from_file_location("predict", "predict .py")
-predict = module_from_spec(spec)
-spec.loader.exec_module(predict)
-
-detector = predict.AITextDetector(threshold=0.30)
-result = detector.predict("Ihr deutscher Text hier...")
-
-print(result)
-# {
-#   "label": 0,          # 0 = Human, 1 = AI
-#   "confidence": 0.98,
-#   "ai_prob": 0.02,
-#   "human_prob": 0.98,
-#   "verdict": "Menschlich verfasst (sehr hohe Konfidenz)",
-#   "threshold": 0.30,
-#   "n_chunks": 1
-# }
+### Step 4: Generalization Suite
+Check how well the model detects new AI text styles rewritten by a local LLM and real-world German news/legal articles:
+```bash
+python test_generalization_tfidf.py
 ```
+*Outputs: `results/tfidf_generalization_report.txt`*
 
 ---
 
-## Model Performance
+## Performance & Calibration
 
-### In-Distribution Test Set
+### Holdout Test Split (50,000 balanced rows)
 
-| Metric | Score |
-|--------|-------|
-| **Accuracy** | 99.77% |
-| **Macro F1** | 99.77% |
-| **Validation Loss** | 0.02066 |
-
-### Preprocessing Pipeline
-
-The model applies domain-aware preprocessing to both training and inference:
-
-| Pattern | Replacement | Purpose |
-|---------|-------------|---------|
-| `§ 18 Abs. 3` | `[PARAGRAPH]` | Legal references |
-| `15.06.2026` | `[DATUM]` | Dates |
-| `CDU`, `SPD`, etc. | `[PARTEI]` | Political parties |
-| Person names | `[PERSON]` | Named entities |
-| `Plenarsitzung` | `[PLENARSITZUNG]` | Parliamentary sessions |
-| `Drucksache` | `[DRUCKSACHE]` | Parliamentary documents |
-
-This prevents the model from memorizing surface-level domain markers and forces it to learn genuine stylistic differences between human and AI text.
+| Model Setup | Accuracy | Macro F1 | ROC-AUC | ECE (Calibration) | Latency (per text) |
+|---|---|---|---|---|---|
+| **TF-IDF + LogReg** | **100.00%** | **100.00%** | **1.0000** | **0.0124** | **0.028 ms** (CPU) |
+| GBERT-Large (Original) | 58.70% | 57.38% | 0.6718 | 0.4086 | ~15.0 ms (GPU) |
+| GBERT-Large (Rotation 2)| 94.67% | 90.69% | 0.9932 | 0.0398 | ~15.0 ms (GPU) |
 
 ---
 
-## AI Model Coverage
+## Top Stylistic Markers (Interpretability)
 
-The detector was trained against text generated by **8 diverse AI models**:
+Below are the top 10 features (n-grams) representing the strongest human-like and AI-like text markers in our dataset:
 
-| Model | Type |
-|-------|------|
-| `gemini-1.5-flash` | Google Gemini |
-| `mistralai/Mistral-7B-Instruct-v0.3` | Mistral AI |
-| `llama3-70b-8192` | Meta LLaMA 3 (70B) |
-| `gemma2-9b-it` | Google Gemma 2 |
-| `mixtral-8x7b-32768` | Mistral MoE |
-| `phi3` | Microsoft Phi-3 |
-| `mistral` | Mistral (base) |
-| `llama3` | Meta LLaMA 3 |
+### 🤖 AI-Generated Indicators (Positive Coefficients)
+1. `direkt` (14.19)
+2. `bezüglich` (9.56)
+3. `von` (8.50)
+4. `unter` (8.48)
+5. `abs` (6.22)
+6. `drucksache` (5.94)
+7. `az` (5.49)
+8. `aufgrund der` (5.41)
+9. `aktuellen` (5.35)
+10. `aufgrund` (5.31)
+
+### 👤 Human-Written Indicators (Negative Coefficients)
+1. `auch` (-4.62)
+2. `ist` (-3.70)
+3. `es` (-3.54)
+4. `sie` (-3.44)
+5. `ich` (-2.98)
+6. `haben` (-2.81)
+7. `aber` (-2.46)
+8. `das` (-2.26)
+9. `nicht` (-2.23)
+10. `und` (-2.17)
 
 ---
 
-## Hardware
+## The Generalization Challenge (Crucial Insight)
 
-Trained on **NVIDIA GeForce RTX 4080** (16GB VRAM) with mixed-precision (BF16/FP16).
+While the model scores a perfect **100.00%** on the in-distribution test set, our **Generalization Test** revealed a critical limitation:
+
+* **Human Generalization**: **100% Accuracy** on unseen Bundestag speeches, news/wiki articles, and constitutional legal texts.
+* **AI Generalization**: **0% Accuracy** on unseen AI text styles rewritten in ChatGPT, Claude, Gemini, or Qwen styles.
+
+### Why does this happen?
+Because of the interpretability of Logistic Regression, we can see that the model heavily relied on synthetic template markers (like `drucksache`, `az`, `abs`, and `aufgrund der aktuellen lage`) present in the training AI dataset. When evaluated on natural AI text that does not contain these specific template keywords, the model finds no positive markers and classifies 100% of the AI instances as human.
+
+This highlights a key challenge in AI text detection: **overfitting to the generation templates of the training corpus**. Future iterations should include aggressive keyword/template sanitization and a more diverse training set.
 
 ---
 
 ## License
 
-This project is for academic and research purposes.
-
----
-
-<p align="center">
-  Built with 🇩🇪 <a href="https://huggingface.co/deepset/gbert-large">deepset/gbert-large</a> · <a href="https://huggingface.co/docs/transformers">🤗 Transformers</a> · <a href="https://streamlit.io">Streamlit</a>
-</p>
+This project is for research and academic purposes.
